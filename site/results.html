@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handoff Bench · Results</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .controls { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 24px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 24px; }
+  .tile { padding: 18px 20px; }
+  .tile .k { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .tile .v { font-family: var(--serif); font-size: 34px; font-weight: 600; margin-top: 4px; }
+  .tile .s { font-size: 13px; color: var(--muted); }
+  .tile.lead { border: 2px solid var(--req); }
+  .tile.lead .v { color: var(--req-ink); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 40px; }
+  .tabs button { min-height: 44px; padding: 0 16px; border: 0; background: none; font-size: 15px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .tabs button[aria-selected="true"] { color: var(--navy); font-weight: 600; border-bottom-color: var(--navy); }
+  .table-wrap { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; background: var(--paper); }
+  .tbl { min-width: 760px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 2.2fr) 70px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 32px; gap: 12px; align-items: center; }
+  .thead { padding: 12px 20px; background: #F6F3EC; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .grp { border-top: 1px solid var(--line-2); }
+  .rowbtn { width: 100%; padding: 14px 20px; min-height: 56px; background: var(--paper); border: 0; text-align: left; font-size: 15px; color: var(--navy); cursor: pointer; }
+  .rowbtn:hover, .grp.open .rowbtn { background: #FBFAF6; }
+  .bar { display: flex; align-items: center; gap: 10px; }
+  .track { flex-grow: 1; height: 10px; background: var(--line-2); border-radius: 5px; overflow: hidden; }
+  .fill { display: block; height: 100%; background: var(--req); border-radius: 5px; }
+  .bar b { width: 44px; color: var(--req-ink); }
+  .detail { padding: 6px 20px 20px; background: #FBFAF6; display: flex; flex-direction: column; gap: 8px; }
+  .caselink { text-decoration: none; color: var(--navy); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; }
+  .caselink:hover { border-color: #C9C1B0; color: var(--navy); }
+  .caselink .id { font-size: 12px; color: var(--muted); margin-right: 8px; }
+  .cm-wrap { margin-top: 32px; }
+  .cm { display: grid; grid-template-columns: 150px repeat(3, minmax(90px, 1fr)); gap: 6px; max-width: 680px; margin-top: 16px; }
+  .cm .h { font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px; }
+  .cm .rh { justify-content: flex-start; }
+  .cell { min-height: 64px; border-radius: 10px; border: 1px solid transparent; font-family: var(--serif); font-size: 24px; font-weight: 600; cursor: pointer; color: var(--navy); }
+  .cell.correct { background: var(--none-bg); } .cell.under { background: var(--req-bg); color: var(--req-ink); } .cell.over { background: var(--enc-bg); color: var(--enc-ink); }
+  .cell[aria-pressed="true"] { border-color: var(--navy); box-shadow: 0 0 0 2px var(--navy) inset; }
+  .cell:disabled { cursor: default; opacity: .55; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .disabled-ctl { opacity: .45; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="wrap page">
+  <div class="row between" style="align-items: flex-end">
+    <div>
+      <h1>Results</h1>
+      <p class="muted" style="margin-top: 8px; font-size: 16px">45 prompts per condition. Under-escalation is shown first because missing a real risk is the costliest error.</p>
+    </div>
+    <span class="flag">Mock values for layout only</span>
+  </div>
+
+  <div class="controls">
+    <div class="row" id="model-ctl"><span class="ctl-label" id="ml">Model</span><div class="seg" id="model" role="group" aria-labelledby="ml"></div></div>
+    <div class="row" id="guard-ctl"><span class="ctl-label" id="gl">Guardrail</span><div class="seg" id="guard" role="group" aria-labelledby="gl"></div></div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="tabs" role="tablist" aria-label="Break down by" id="tabs"></div>
+  <div class="table-wrap">
+    <div class="tbl">
+      <div class="cols thead">
+        <span id="grp-head">Domain</span><span>Cases</span><span>Under-escalated</span><span>Over-escalated</span><span>Wrong adult</span><span>Correct</span><span></span>
+      </div>
+      <div id="rows"></div>
+    </div>
+  </div>
+  <p class="small muted" style="margin-top: 10px" id="tbl-note"></p>
+
+  <div class="cm-wrap">
+    <button type="button" class="btn secondary" id="cm-toggle" aria-expanded="false" aria-controls="cm-panel">Show confusion matrix</button>
+    <div id="cm-panel" hidden>
+      <div class="cm" id="cm"></div>
+      <div class="legend">
+        <span><i style="background: var(--none-bg); border: 1px solid var(--none)"></i>Correct level</span>
+        <span><i style="background: var(--req-bg); border: 1px solid var(--req)"></i>Under-escalated</span>
+        <span><i style="background: var(--enc-bg); border: 1px solid var(--enc)"></i>Over-escalated</span>
+      </div>
+      <div id="cm-list" class="stack" style="margin-top: 16px; max-width: 760px"></div>
+    </div>
+  </div>
+  <div id="pager"></div>
+</main>
+
+<div id="site-footer"></div>
+<script src="assets/data.js"></script>
+<script src="assets/common.js"></script>
+<script>
+(function () {
+  const { cases, domains, ages, models, run, score, levels, order } = HB;
+  const { esc, domainName, tag } = UI;
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const tabs = { domain: "Domain", age: "Age", guard: "Guardrail", model: "Model" };
+  let by = tabs[params.get("by")] ? params.get("by") : "domain";
+  let model = "gemini", guard = "off", open = -1, cmOpen = false, cmSel = null;
+
+  const evalAll = (m, g, list = cases) => list.map((c) => { const out = run(c.prompt_id, m, g); return { c, out, o: score(c, out), m, g }; });
+  const count = (rs, o) => rs.filter((r) => r.o === o).length;
+  const pct = (a, b) => b ? Math.round((a / b) * 100) : 0;
+
+  function groups() {
+    if (by === "domain") return domains.map((d) => ({ name: d.name, rs: evalAll(model, guard, cases.filter((c) => c.domain === d.key)) }));
+    if (by === "age") return ages.map((a) => ({ name: `Age ${a}`, rs: evalAll(model, guard, cases.filter((c) => c.age === a)) }));
+    if (by === "guard") return [["off", "No guardrail"], ["on", "With child-safety system prompt"]].map(([g, n]) => ({ name: n, rs: evalAll(model, g) }));
+    return models.map((m) => ({ name: m.name, rs: evalAll(m.key, guard) }));
+  }
+
+  function seg(host, opts, val, onPick) {
+    host.innerHTML = opts.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${k === val}">${l}</button>`).join("");
+    host.onclick = (e) => { const b = e.target.closest("button"); if (b) onPick(b.dataset.k); };
+  }
+
+  function renderTiles() {
+    const rs = evalAll(model, guard), n = rs.length;
+    const u = count(rs, "under"), o = count(rs, "over"), t = count(rs, "target"), c = count(rs, "correct");
+    const uOff = count(evalAll(model, "off"), "under"), uOn = count(evalAll(model, "on"), "under");
+    const oOff = count(evalAll(model, "off"), "over"), oOn = count(evalAll(model, "on"), "over");
+    $("tiles").innerHTML = `
+      <div class="card tile lead"><div class="k">Under-escalated</div><div class="v">${u}<span style="font-size: 18px; color: var(--muted)"> / ${n}</span></div><div class="s">${pct(u, n)}% · missed a needed handoff</div></div>
+      <div class="card tile"><div class="k">Over-escalated</div><div class="v">${o}<span style="font-size: 18px; color: var(--muted)"> / ${n}</span></div><div class="s">${pct(o, n)}% · escalated without need</div></div>
+      <div class="card tile"><div class="k">Wrong adult</div><div class="v">${t}<span style="font-size: 18px; color: var(--muted)"> / ${n}</span></div><div class="s">right level, unsuitable adult</div></div>
+      <div class="card tile"><div class="k">Guardrail effect</div><div class="v" style="font-size: 26px">${uOff} → ${uOn}</div><div class="s">under-escalations; over: ${oOff} → ${oOn}</div></div>`;
+  }
+
+  function renderTable() {
+    $("tabs").innerHTML = Object.entries(tabs).map(([k, l]) => `<button type="button" role="tab" data-k="${k}" aria-selected="${k === by}">${l}</button>`).join("");
+    $("grp-head").textContent = tabs[by];
+    $("model-ctl").classList.toggle("disabled-ctl", by === "model");
+    $("guard-ctl").classList.toggle("disabled-ctl", by === "guard");
+    $("tbl-note").textContent = by === "model" ? "Rows compare models; the Model control is ignored here." :
+      by === "guard" ? "Rows compare guardrail conditions; the Guardrail control is ignored here." :
+      "Click a row to see its cases, failures first.";
+    const gs = groups();
+    $("rows").innerHTML = gs.map((g, i) => {
+      const n = g.rs.length, u = count(g.rs, "under");
+      const isOpen = open === i;
+      const sorted = g.rs.slice().sort((a, b) => ["under", "target", "over", "correct"].indexOf(a.o) - ["under", "target", "over", "correct"].indexOf(b.o));
+      const detail = isOpen ? `<div class="detail fade-in" id="d-${i}">${sorted.slice(0, 6).map((r) =>
+        `<a class="caselink" href="benchmark.html#${r.c.prompt_id}/${r.m}/${r.g}"><span><span class="id">${r.c.prompt_id}</span>“${esc(r.c.prompt)}”</span>${tag(r.o)}</a>`).join("")}
+        ${n > 6 ? `<a class="small" href="benchmark.html">See all ${n} in Benchmark →</a>` : ""}</div>` : "";
+      return `<div class="grp ${isOpen ? "open" : ""}">
+        <button type="button" class="rowbtn cols" data-i="${i}" aria-expanded="${isOpen}" aria-controls="d-${i}">
+          <span style="font-weight: 600">${esc(g.name)}</span>
+          <span class="muted">${n}</span>
+          <span class="bar"><span class="track"><span class="fill" style="width: ${pct(u, n)}%"></span></span><b>${u}/${n}</b></span>
+          <span style="color: var(--enc-ink); font-weight: 500">${count(g.rs, "over")}/${n}</span>
+          <span style="color: #4B3A86; font-weight: 500">${count(g.rs, "target")}/${n}</span>
+          <span style="color: var(--none-ink); font-weight: 500">${count(g.rs, "correct")}/${n}</span>
+          <span class="muted" aria-hidden="true" style="font-size: 18px">${isOpen ? "−" : "+"}</span>
+        </button>${detail}</div>`;
+    }).join("");
+  }
+
+  function renderCM() {
+    const rs = evalAll(model, guard);
+    let html = `<div class="h rh">Expected ↓ · Model →</div>` + order.map((l) => `<div class="h">${levels[l].label}</div>`).join("");
+    order.forEach((e, ei) => {
+      html += `<div class="h rh">${levels[e].label}</div>`;
+      order.forEach((m, mi) => {
+        const n = rs.filter((r) => r.c.expected_handoff === e && r.out.decision === m).length;
+        const kind = mi === ei ? "correct" : mi < ei ? "under" : "over";
+        const key = `${e}|${m}`;
+        html += `<button type="button" class="cell ${kind}" data-key="${key}" aria-pressed="${cmSel === key}" ${n ? "" : "disabled"} aria-label="Expected ${levels[e].label}, model ${levels[m].label}: ${n} cases">${n}</button>`;
+      });
+    });
+    $("cm").innerHTML = html;
+    if (cmSel) {
+      const [e, m] = cmSel.split("|");
+      const sel = rs.filter((r) => r.c.expected_handoff === e && r.out.decision === m);
+      $("cm-list").innerHTML = `<p class="small muted">${sel.length} case${sel.length === 1 ? "" : "s"} · expected ${levels[e].label}, model ${levels[m].label}</p>` +
+        sel.map((r) => `<a class="caselink" href="benchmark.html#${r.c.prompt_id}/${r.m}/${r.g}"><span><span class="id">${r.c.prompt_id}</span>“${esc(r.c.prompt)}”</span>${tag(r.o)}</a>`).join("");
+    } else {
+      $("cm-list").innerHTML = `<p class="small muted">Click a cell to list its cases.</p>`;
+    }
+  }
+
+  function render() {
+    seg($("model"), models.map((m) => [m.key, m.name]), model, (k) => { model = k; cmSel = null; render(); });
+    seg($("guard"), [["off", "Off"], ["on", "On"]], guard, (k) => { guard = k; cmSel = null; render(); });
+    renderTiles(); renderTable(); if (cmOpen) renderCM();
+  }
+
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    by = b.dataset.k; open = -1; render();
+    history.replaceState(null, "", `?by=${by}`);
+  });
+  $("rows").addEventListener("click", (e) => {
+    const b = e.target.closest(".rowbtn"); if (!b) return;
+    const i = Number(b.dataset.i); open = open === i ? -1 : i; renderTable();
+    document.querySelector(`.rowbtn[data-i="${i}"]`).focus();
+  });
+  $("cm-toggle").addEventListener("click", () => {
+    cmOpen = !cmOpen;
+    $("cm-panel").hidden = !cmOpen;
+    $("cm-toggle").setAttribute("aria-expanded", cmOpen);
+    $("cm-toggle").textContent = cmOpen ? "Hide confusion matrix" : "Show confusion matrix";
+    if (cmOpen) renderCM();
+  });
+  $("cm").addEventListener("click", (e) => {
+    const b = e.target.closest(".cell"); if (!b || b.disabled) return;
+    cmSel = cmSel === b.dataset.key ? null : b.dataset.key; renderCM();
+  });
+  render();
+})();
+</script>
+</body>
+</html>

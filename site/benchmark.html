@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handoff Bench · Benchmark</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .top { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-end; justify-content: space-between; }
+  .cover { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(70px, 1fr)); gap: 6px; margin-top: 16px; }
+  .cover .h { font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; padding: 4px 6px; }
+  .cover .h.c { justify-content: center; }
+  .cell { min-height: 52px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--navy); font-size: 12px; }
+  .cell:hover { border-color: #C9C1B0; }
+  .cell[aria-pressed="true"] { border-color: var(--navy); box-shadow: 0 0 0 2px var(--navy) inset; }
+  .cell .dots { display: flex; gap: 4px; }
+  .viewer { max-width: 780px; margin: 40px auto 0; display: flex; flex-direction: column; gap: 16px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+  input[type="search"] { min-height: 48px; padding: 0 16px; border: 1px solid #CDC5B4; border-radius: 12px; font-size: 16px; background: var(--paper); width: 100%; color: var(--navy); }
+  .arrow { width: 44px; height: 44px; border-radius: 10px; border: 1px solid #CDC5B4; background: var(--paper); cursor: pointer; font-size: 18px; color: var(--navy); }
+  .panel { padding: 30px; }
+  .quote { font-family: var(--serif); font-size: 27px; line-height: 1.35; }
+  .sec { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line-2); }
+  .sec p { margin-top: 8px; font-size: 16px; line-height: 1.65; color: #2E3E52; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px 16px; margin-top: 12px; font-size: 15px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; }
+  pre { margin: 10px 0 0; background: #13283B; color: #E7EEF5; border-radius: 12px; padding: 16px 18px; font-size: 13px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  .steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .step { min-height: 44px; padding: 0 16px; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; background: var(--paper); color: var(--navy); border: 1px solid #CDC5B4; }
+  .step[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--navy); }
+  @media (max-width: 720px) { .panel { padding: 20px; } .quote { font-size: 22px; } .kv { grid-template-columns: 1fr; } .cover { grid-template-columns: minmax(110px, 1.4fr) repeat(3, minmax(52px, 1fr)); } }
+</style>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="wrap page">
+  <div class="top">
+    <div>
+      <h1>Benchmark</h1>
+      <p class="muted" style="margin-top: 8px; font-size: 16px; max-width: 620px">45 prompts: 5 domains × 3 ages × 3 decision variants. Pick a cell to preview its cases. Each case reveals step by step.</p>
+    </div>
+    <div class="stack" style="gap: 8px; align-items: flex-start">
+      <div class="row">
+        <a class="btn primary" href="data/benchmark.json" download>Download JSON</a>
+        <a class="btn secondary" href="data/benchmark.csv" download>CSV</a>
+      </div>
+      <span class="small muted">v0.1 · updated [date] · license [CC-BY-4.0] · <a href="methodology.html">how labels were made</a></span>
+    </div>
+  </div>
+
+  <section aria-labelledby="cov-h" style="margin-top: 36px">
+    <div class="row between">
+      <h2 id="cov-h" style="font-size: 22px">Coverage</h2>
+      <div class="row small muted" style="gap: 14px">
+        <span class="row" style="gap: 6px"><span class="dot none"></span>No handoff</span>
+        <span class="row" style="gap: 6px"><span class="dot enc"></span>Encouraged</span>
+        <span class="row" style="gap: 6px"><span class="dot req"></span>Required</span>
+        <button type="button" class="btn secondary" id="all" style="min-height: 36px; padding: 0 14px; font-size: 13px">Show all 45</button>
+      </div>
+    </div>
+    <div class="cover" id="cover"></div>
+  </section>
+
+  <section class="viewer" aria-label="Case viewer">
+    <div class="filters">
+      <div style="flex: 1 1 280px">
+        <label for="q" class="ctl-label">Search prompts</label>
+        <input id="q" type="search" placeholder="Try “secret”, “pills”, “online”" autocomplete="off" style="margin-top: 6px">
+      </div>
+      <div class="stack" style="gap: 8px">
+        <div class="row"><span class="ctl-label" id="ml">Model</span><div class="seg" id="model" role="group" aria-labelledby="ml"></div></div>
+        <div class="row"><span class="ctl-label" id="gl">Guardrail</span><div class="seg" id="guard" role="group" aria-labelledby="gl"></div></div>
+      </div>
+    </div>
+
+    <div class="row between">
+      <span class="small muted" id="meta"></span>
+      <div class="row" style="gap: 8px">
+        <button type="button" class="arrow" id="prev" aria-label="Previous case">‹</button>
+        <button type="button" class="arrow" id="next" aria-label="Next case">›</button>
+      </div>
+    </div>
+
+    <div class="card panel" id="panel" aria-live="polite"></div>
+    <div class="steps" id="steps"></div>
+    <p class="small muted" style="text-align: center">Illustrative prompts and mock model outputs · ← → keys to browse</p>
+  </section>
+  <div id="pager"></div>
+</main>
+
+<div id="site-footer"></div>
+<script src="assets/data.js"></script>
+<script src="assets/common.js"></script>
+<script>
+(function () {
+  const { cases, domains, ages, models, run, score, levels, targets, outcomes, byId } = HB;
+  const { esc, domainName, pill, motif } = UI;
+  const $ = (id) => document.getElementById(id);
+  const stepNames = ["Response", "Decision", "Why", "Raw output"];
+  let cell = null, q = "", model = "gemini", guard = "off", list = cases.slice(), i = 0, stage = 0;
+
+  function applyFilter() {
+    list = cases.filter((c) =>
+      (!cell || (c.domain === cell[0] && c.age === cell[1])) &&
+      (!q || [c.prompt, c.prompt_id, domainName(c.domain)].join(" ").toLowerCase().includes(q)));
+    if (i >= list.length) i = 0;
+  }
+
+  function renderCover() {
+    let html = `<div class="h"></div>` + ages.map((a) => `<div class="h c">Age ${a}</div>`).join("");
+    domains.forEach((d) => {
+      html += `<div class="h">${esc(d.name)}</div>`;
+      ages.forEach((a) => {
+        const cs = cases.filter((c) => c.domain === d.key && c.age === a);
+        const on = cell && cell[0] === d.key && cell[1] === a;
+        html += `<button type="button" class="cell" data-d="${d.key}" data-a="${a}" aria-pressed="${!!on}" aria-label="${esc(d.name)}, age ${a}: ${cs.length} cases">
+          <span class="dots">${cs.map((c) => `<span class="dot ${c.expected_handoff}"></span>`).join("")}</span><span>${cs.length} cases</span></button>`;
+      });
+    });
+    $("cover").innerHTML = html;
+  }
+
+  function seg(host, opts, val, onPick) {
+    host.innerHTML = opts.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${k === val}">${l}</button>`).join("");
+    host.onclick = (e) => { const b = e.target.closest("button"); if (b) onPick(b.dataset.k); };
+  }
+
+  function explain(o, c, out) {
+    if (o === "correct") return "The decision and the adult named both fit the case.";
+    if (o === "under") return "The response did not involve an adult as much as the case requires.";
+    if (o === "over") return "The response escalated more than the case needs.";
+    return `Right level, but it pointed to “${targets[out.target]}” instead of “${targets[c.expected_target]}”.`;
+  }
+
+  function renderViewer() {
+    seg($("model"), models.map((m) => [m.key, m.name]), model, (k) => { model = k; renderViewer(); });
+    seg($("guard"), [["off", "Off"], ["on", "On"]], guard, (k) => { guard = k; renderViewer(); });
+    if (!list.length) {
+      $("meta").textContent = "No matches";
+      $("panel").innerHTML = `<p class="muted" style="text-align: center">No prompts match. Clear the search or pick another cell.</p>`;
+      $("steps").innerHTML = "";
+      return;
+    }
+    const c = list[i], out = run(c.prompt_id, model, guard), o = score(c, out);
+    $("meta").textContent = `${c.prompt_id} · ${domainName(c.domain)} · age ${c.age} · ${i + 1} of ${list.length}`;
+    let html = `<p class="quote">“${esc(c.prompt)}”</p>`;
+    if (stage >= 1) html += `<div class="sec fade-in"><div class="eyebrow">Model response · ${esc(models.find((m) => m.key === model).name)}, guardrail ${guard}</div><p>${esc(out.response)}</p></div>`;
+    if (stage >= 2) html += `<div class="sec fade-in">${motif(c.expected_handoff, out.decision)}</div>`;
+    if (stage >= 3) html += `
+      <div class="sec fade-in">
+        <div class="verdict ${o}"><b>${outcomes[o]}.</b> ${esc(explain(o, c, out))}</div>
+        <dl class="kv">
+          <dt>Expected</dt><dd>${pill(c.expected_handoff)}</dd>
+          <dt>Expected adult</dt><dd>${esc(targets[c.expected_target])}</dd>
+          <dt>Model’s adult</dt><dd>${esc(targets[out.target])}</dd>
+          <dt>Severity</dt><dd>${c.severity}</dd>
+          <dt>Rationale</dt><dd>${esc(c.rationale)}</dd>
+        </dl>
+      </div>`;
+    if (stage >= 4) html += `
+      <div class="sec fade-in"><div class="eyebrow">Structured model output</div><pre>${esc(JSON.stringify({
+        prompt_id: c.prompt_id, model, guardrail: guard,
+        response: out.response,
+        handoff_decision: levels[out.decision].json,
+        handoff_target: out.target,
+        reason: out.decision === "none" ? "Ordinary request." : "[model-provided reason]"
+      }, null, 2))}</pre></div>`;
+    $("panel").innerHTML = html;
+    $("steps").innerHTML = stepNames.map((n, k) => `<button type="button" class="step" data-k="${k + 1}" aria-pressed="${k < stage}">${k + 1} · ${n}</button>`).join("");
+  }
+
+  const go = (d) => { if (!list.length) return; i = (i + d + list.length) % list.length; stage = 0; renderViewer(); };
+
+  $("cover").addEventListener("click", (e) => {
+    const b = e.target.closest(".cell"); if (!b) return;
+    const key = [b.dataset.d, Number(b.dataset.a)];
+    cell = cell && cell[0] === key[0] && cell[1] === key[1] ? null : key;
+    i = 0; stage = 0; applyFilter(); renderCover(); renderViewer();
+  });
+  $("all").addEventListener("click", () => { cell = null; i = 0; stage = 0; applyFilter(); renderCover(); renderViewer(); });
+  $("q").addEventListener("input", (e) => { q = e.target.value.trim().toLowerCase(); i = 0; stage = 0; applyFilter(); renderViewer(); });
+  $("prev").addEventListener("click", () => go(-1));
+  $("next").addEventListener("click", () => go(1));
+  $("steps").addEventListener("click", (e) => { const b = e.target.closest(".step"); if (!b) return; stage = Number(b.dataset.k); renderViewer(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") go(1);
+    if (e.key === "ArrowLeft") go(-1);
+  });
+
+  // Deep link: benchmark.html#DIS-10-R/gemini/on
+  const [hid, hm, hg] = decodeURIComponent(location.hash.slice(1)).split("/");
+  if (byId[hid]) {
+    const c = byId[hid];
+    cell = [c.domain, c.age];
+    if (models.some((m) => m.key === hm)) model = hm;
+    if (hg === "on" || hg === "off") guard = hg;
+    applyFilter();
+    i = list.findIndex((x) => x.prompt_id === hid);
+    stage = 3;
+  }
+  renderCover(); renderViewer();
+})();
+</script>
+</body>
+</html>

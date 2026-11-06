@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handoff Bench · Compare</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 24px; }
+  .side { display: flex; flex-direction: column; overflow: hidden; }
+  .side-head { padding: 14px 20px; border-bottom: 1px solid var(--line-2); display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .side-head b { font-size: 15px; }
+  .side-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; flex-grow: 1; }
+  .bubble { background: var(--sand); border-radius: 12px; padding: 14px 16px; font-size: 17px; line-height: 1.55; }
+  .resp { font-size: 15px; line-height: 1.6; color: #2E3E52; }
+  .eval { border-top: 1px dashed #D8D2C4; padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin-top: 20px; }
+  .dots span { width: 8px; height: 8px; border-radius: 50%; background: #D3CCBD; }
+  .dots span.on { background: var(--navy); }
+</style>
+</head>
+<body>
+<div id="site-header"></div>
+
+<main class="wrap page">
+  <div class="row between">
+    <div class="row">
+      <span class="ctl-label" id="mode-label">Compare by</span>
+      <div class="seg" id="modes" role="group" aria-labelledby="mode-label"></div>
+    </div>
+    <span class="flag">Illustrative examples · mock results</span>
+  </div>
+
+  <h1 style="margin-top: 28px" id="title">Two versions. Which one needs a grown-up?</h1>
+  <p class="muted" style="margin-top: 8px; font-size: 16px" id="hint"></p>
+
+  <div class="pair" id="pair" aria-live="polite"></div>
+
+  <div class="row" style="justify-content: center; margin-top: 28px">
+    <button type="button" class="btn primary" id="reveal">Reveal evaluation</button>
+    <button type="button" class="btn secondary" id="next">Next pair →</button>
+  </div>
+  <div class="dots" id="dots" aria-hidden="true"></div>
+</main>
+
+<div id="site-footer"></div>
+<script src="assets/data.js"></script>
+<script src="assets/common.js"></script>
+<script>
+(function () {
+  const { pairs, byId, run, score, models, levels, targets } = HB;
+  const { esc, domainName, pill, tag, motif } = UI;
+  const $ = (id) => document.getElementById(id);
+  const modeKeys = Object.keys(pairs);
+  const titles = {
+    detail: "Two versions. Which one needs a grown-up?",
+    guard: "Does a child-safety system prompt change the decision?",
+    age: "Same words, different age. Should the decision change?",
+    model: "Same prompt, two models."
+  };
+  let mode = new URLSearchParams(location.search).get("by");
+  if (!pairs[mode]) mode = "detail";
+  let i = 0, revealed = false;
+
+  function resolve(it) {
+    if (it.inline) {
+      const c = { prompt_id: null, domain: it.domain, age: it.age, prompt: it.prompt, expected_handoff: it.exp, expected_target: it.expT, rationale: "" };
+      const out = { decision: it.mod, target: it.modT, response: it.response };
+      return { c, out, model: "gemini", guard: "off" };
+    }
+    return { c: byId[it.ref], out: run(it.ref, it.model, it.guard), model: it.model, guard: it.guard };
+  }
+
+  function explain(o, c, out) {
+    if (o === "correct") return c.rationale || "The decision fits the child’s age and situation.";
+    if (o === "under") return `Expected “${levels[c.expected_handoff].label}”, but the response didn’t involve an adult enough.`;
+    if (o === "over") return `Expected “${levels[c.expected_handoff].label}”. The response escalated more than needed.`;
+    return `Right level, wrong adult: pointed to “${targets[out.target]}” instead of “${targets[c.expected_target]}”.`;
+  }
+
+  function sideLabel(k, r) {
+    if (mode === "detail") return k === 0 ? "Version A" : "Version B";
+    if (mode === "guard") return r.guard === "on" ? "With guardrail" : "No guardrail";
+    if (mode === "age") return `Age ${r.c.age}`;
+    return models.find((m) => m.key === r.model).name;
+  }
+
+  function render() {
+    $("modes").innerHTML = modeKeys.map((k) => `<button type="button" data-k="${k}" aria-pressed="${k === mode}">${pairs[k].label}</button>`).join("");
+    $("title").textContent = titles[mode];
+    const set = pairs[mode].items;
+    $("hint").textContent = `${pairs[mode].hint} Pair ${i + 1} of ${set.length}.`;
+    $("pair").innerHTML = set[i].map((it, k) => {
+      const r = resolve(it);
+      const o = score(r.c, r.out);
+      const link = r.c.prompt_id ? `<a class="small" href="benchmark.html#${r.c.prompt_id}/${r.model}/${r.guard}">Open in Benchmark →</a>` : `<span class="small muted">Supplementary age probe</span>`;
+      const ev = revealed ? `
+        <div class="eval fade-in">
+          ${motif(r.c.expected_handoff, r.out.decision)}
+          <div class="verdict ${o}"><b>${HB.outcomes[o]}.</b> ${esc(explain(o, r.c, r.out))}</div>
+          ${link}
+        </div>` : "";
+      return `
+        <article class="card side">
+          <div class="side-head"><b>${sideLabel(k, r)}</b><span class="small muted">${esc(domainName(r.c.domain))} · age ${r.c.age}</span></div>
+          <div class="side-body">
+            <p class="bubble">“${esc(r.c.prompt)}”</p>
+            <p class="resp">${esc(r.out.response)}</p>
+            ${ev}
+          </div>
+        </article>`;
+    }).join("");
+    $("reveal").hidden = revealed;
+    $("dots").innerHTML = set.map((_, k) => `<span class="${k === i ? "on" : ""}"></span>`).join("");
+  }
+
+  $("modes").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    mode = b.dataset.k; i = 0; revealed = false; render();
+    history.replaceState(null, "", `?by=${mode}`);
+  });
+  $("reveal").addEventListener("click", () => { revealed = true; render(); $("next").focus(); });
+  $("next").addEventListener("click", () => { i = (i + 1) % pairs[mode].items.length; revealed = false; render(); });
+  render();
+})();
+</script>
+</body>
+</html>
